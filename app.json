@@ -4,7 +4,8 @@
     "device:os.bg_service",
     "device:os.alarm",
     "device:os.local_storage",
-    "data:user.hd.sleep"
+    "data:user.hd.sleep",
+    "event:os.health.sleep_status"
   ],
   "module": {
     "app-service": {

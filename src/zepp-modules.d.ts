@@ -34,3 +34,10 @@ declare module "@zos/alarm" {
   export function set(option: AlarmSetOption): number;
   export function cancel(id: number | { id: number }): void;
 }
+
+interface AppServiceOptions {
+  onInit?(options?: unknown): void;
+  onDestroy?(): void;
+}
+
+declare function AppService(options: AppServiceOptions): void;

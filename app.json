@@ -1,0 +1,17 @@
+{
+  "configVersion": "v3",
+  "permissions": [
+    "device:os.bg_service",
+    "device:os.alarm",
+    "device:os.local_storage",
+    "data:user.hd.sleep"
+  ],
+  "module": {
+    "app-service": {
+      "services": ["app-service/sleep_alarm_service"]
+    },
+    "app-event": {
+      "path": "app-service/sleep_alarm_service"
+    }
+  }
+}

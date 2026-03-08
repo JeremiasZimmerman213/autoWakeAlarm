@@ -1,5 +1,24 @@
 {
   "configVersion": "v3",
+  "app": {
+    "appId": 1000001,
+    "appName": "AutoWakeAlarm",
+    "appType": "app",
+    "version": {
+      "code": 1,
+      "name": "0.1.0"
+    },
+    "icon": "icon.png",
+    "vender": "huami",
+    "description": "Sleep-triggered alarm MVP"
+  },
+  "runtime": {
+    "apiVersion": {
+      "compatible": "1.0.0",
+      "target": "1.0.0",
+      "minVersion": "1.0.0"
+    }
+  },
   "permissions": [
     "device:os.bg_service",
     "device:os.alarm",
@@ -7,15 +26,43 @@
     "data:user.hd.sleep",
     "event:os.health.sleep_status"
   ],
-  "module": {
-    "page": {
-      "pages": ["page/index"]
-    },
-    "app-service": {
-      "services": ["app-service/sleep_alarm_service"]
-    },
-    "app-event": {
-      "path": "app-service/sleep_alarm_service"
+  "targets": {
+    "active-2-square": {
+      "module": {
+        "page": {
+          "pages": ["page/index"]
+        },
+        "app-service": {
+          "services": ["app-service/sleep_alarm_service"]
+        },
+        "app-event": {
+          "path": "app-service/sleep_alarm_service"
+        }
+      },
+      "platforms": [
+        {
+          "name": "Amazfit Active 2 (Square)",
+          "deviceSource": 10223872,
+          "st": "s"
+        },
+        {
+          "name": "Amazfit Active 2 (Square)",
+          "deviceSource": 10223873,
+          "st": "s"
+        },
+        {
+          "name": "Amazfit Active 2 (Square)",
+          "deviceSource": 10223875,
+          "st": "s"
+        }
+      ],
+      "designWidth": 390
     }
-  }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "AutoWakeAlarm"
+    }
+  },
+  "defaultLanguage": "en-US"
 }

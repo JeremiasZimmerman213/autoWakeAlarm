@@ -20,3 +20,19 @@ The idea is simple: instead of setting an alarm for a fixed clock time, the user
 ## Current status
 Documentation bootstrap only.
 Implementation should begin with pure logic and adapters, then background orchestration, then UI.
+
+## Zepp Target Note
+- `app.json` is currently pinned to simulator target `Amazfit Active 2 (Square)` (`deviceSource` values `10223872`, `10223873`, `10223875`) for local `zeus dev` compatibility.
+- To switch later (for Helio or another watch), update:
+  - `targets.<target-name>.platforms`
+  - `targets.<target-name>.designWidth`
+  - `runtime.apiVersion` if device API support differs.
+
+## Zeus Runtime Files
+- Zeus packages root runtime JS entry files:
+  - `app.js`
+  - `page/index.js`
+  - `app-service/sleep_alarm_service.js`
+- TypeScript source remains under `src/`.
+- Runtime JS is emitted from `src/` into root Zepp folders with:
+  - `./node_modules/.bin/tsc -p tsconfig.zeus-runtime.json`

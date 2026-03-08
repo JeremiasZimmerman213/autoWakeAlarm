@@ -35,9 +35,44 @@ declare module "@zos/alarm" {
   export function cancel(id: number | { id: number }): void;
 }
 
+declare module "@zos/ui" {
+  export const widget: {
+    TEXT: number;
+    BUTTON: number;
+  };
+
+  export const prop: {
+    MORE: number | string;
+  };
+
+  export interface WidgetInstance {
+    setProperty(key: number | string, value: unknown): void;
+  }
+
+  export interface WidgetOptions {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    text?: string;
+    text_size?: number;
+    click_func?: () => void;
+  }
+
+  export function createWidget(type: number, options: WidgetOptions): WidgetInstance;
+}
+
 interface AppServiceOptions {
   onInit?(options?: unknown): void;
   onDestroy?(): void;
 }
 
 declare function AppService(options: AppServiceOptions): void;
+
+interface PageOptions {
+  onInit?(): void;
+  build?(): void;
+  onDestroy?(): void;
+}
+
+declare function Page(options: PageOptions): void;

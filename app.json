@@ -7,12 +7,19 @@
     "data:user.hd.sleep",
     "event:os.health.sleep_status"
   ],
-  "module": {
-    "app-service": {
-      "services": ["app-service/sleep_alarm_service"]
-    },
-    "app-event": {
-      "path": "app-service/sleep_alarm_service"
+  "targets": {
+    "default": {
+      "module": {
+        "page": {
+          "pages": ["page/index"]
+        },
+        "app-service": {
+          "services": ["app-service/sleep_alarm_service"]
+        },
+        "app-event": {
+          "path": "app-service/sleep_alarm_service"
+        }
+      }
     }
   }
 }

@@ -1,8 +1,10 @@
 import type { AlarmId, EpochMs } from "../core/types.js";
+import type { Logger } from "../debug/logger.js";
+import { NoopLogger } from "../debug/logger.js";
 import { MS_PER_SECOND } from "../utils/time.js";
+import { APP_SERVICE_ENTRY_PATH } from "../config/runtime-paths.js";
 
-// TODO(zepp-validation): Confirm this path matches the final built App Service entry path.
-export const ALARM_DESTINATION_PATH = "app-service/sleep_alarm_service";
+export const ALARM_DESTINATION_PATH = APP_SERVICE_ENTRY_PATH;
 
 interface ZeppAlarmSetOptions {
   readonly url: string;
@@ -45,9 +47,16 @@ export interface AlarmAdapter {
   cancelAlarm(alarmId: AlarmId): Promise<AlarmCancelResult>;
 }
 
+export interface AlarmAdapterOptions {
+  readonly destinationPath?: string;
+  readonly logger?: Logger;
+}
+
 export function createZeppAlarmAdapter(
-  destinationPath: string = ALARM_DESTINATION_PATH
+  options: AlarmAdapterOptions = {}
 ): AlarmAdapter {
+  const destinationPath = options.destinationPath ?? ALARM_DESTINATION_PATH;
+  const logger = options.logger ?? new NoopLogger();
   let alarmModulePromise: Promise<ZeppAlarmModule> | null = null;
 
   async function getAlarmModule(): Promise<ZeppAlarmModule> {
@@ -60,8 +69,10 @@ export function createZeppAlarmAdapter(
 
   return {
     async scheduleAlarm(wakeTimeMs: EpochMs): Promise<AlarmScheduleResult> {
+      logger.info("Alarm schedule attempt.", { wakeTimeMs, destinationPath });
       const setOptions = toAlarmSetOptions(wakeTimeMs, destinationPath);
       if (setOptions === null) {
+        logger.warn("Alarm schedule rejected due to invalid wake time.", { wakeTimeMs });
         return { ok: false, reason: "invalid_wake_time" };
       }
 
@@ -70,29 +81,39 @@ export function createZeppAlarmAdapter(
         const alarmId = module.set(setOptions);
 
         if (alarmId === 0) {
+          logger.warn("Alarm schedule failed: Zepp returned 0.", { wakeTimeMs });
           return { ok: false, reason: "set_returned_zero" };
         }
 
+        logger.info("Alarm schedule success.", {
+          alarmId,
+          scheduledUtcSeconds: setOptions.time
+        });
         return {
           ok: true,
           alarmId,
           scheduledUtcSeconds: setOptions.time
         };
       } catch {
+        logger.error("Alarm schedule failed with Zepp alarm error.", { wakeTimeMs });
         return { ok: false, reason: "zepp_alarm_error" };
       }
     },
 
     async cancelAlarm(alarmId: AlarmId): Promise<AlarmCancelResult> {
+      logger.info("Alarm cancel attempt.", { alarmId });
       if (!isValidZeppAlarmId(alarmId)) {
+        logger.warn("Alarm cancel rejected due to invalid alarm id.", { alarmId });
         return { ok: false, reason: "invalid_alarm_id" };
       }
 
       try {
         const module = await getAlarmModule();
         module.cancel(alarmId);
+        logger.info("Alarm cancel success.", { alarmId });
         return { ok: true };
       } catch {
+        logger.error("Alarm cancel failed with Zepp alarm error.", { alarmId });
         return { ok: false, reason: "zepp_alarm_error" };
       }
     }

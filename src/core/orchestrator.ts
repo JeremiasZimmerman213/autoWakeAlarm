@@ -2,6 +2,7 @@ import type { AlarmAdapter } from "../alarm/alarm-adapter.js";
 import type { Logger } from "../debug/logger.js";
 import type { SleepAdapter } from "../sleep/sleep-adapter.js";
 import type { SessionStore } from "../storage/session-store.js";
+import { formatEpochForLog } from "../utils/debug-format.js";
 import { INITIAL_APP_STATE, reduceAppState } from "./state-machine.js";
 import {
   isPersistableState,
@@ -54,13 +55,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       let state: AppState = snapshot.state;
       const originalState = state;
       let didScheduleAlarm = false;
+      deps.logger.info("Persisted session loaded.", {
+        trigger: input.trigger,
+        status: snapshot.state.status,
+        savedAtMs: snapshot.savedAtMs
+      });
 
       if (input.trigger === "alarm_fire") {
         const alarmTransition = reduceAppState(state, { type: "ALARM_FIRED" });
         state = alarmTransition.state;
 
         const didPersist = await persistStateIfNeeded(deps, snapshot.state, state, now());
-        deps.logger.info("Processed alarm-fire trigger.", {
+        deps.logger.info("Alarm fire handling completed.", {
           previousStatus: snapshot.state.status,
           nextStatus: state.status
         });
@@ -113,6 +119,11 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         detectedAtMs: sleepStart.detectedAtMs
       });
       state = transition.state;
+      deps.logger.info("Sleep start confirmed for state transition.", {
+        startTime: formatEpochForLog(sleepStart.startTimeMs),
+        detectedAt: formatEpochForLog(sleepStart.detectedAtMs),
+        nextStatus: state.status
+      });
 
       if (transition.effects.length > 0) {
         const effectResult = await applyEffects(deps, state, transition.effects);
@@ -146,6 +157,11 @@ async function applyEffects(
 
   for (const effect of effects) {
     if (effect.type === "SCHEDULE_ALARM") {
+      deps.logger.info("Computed wake time.", {
+        sleepStart: formatEpochForLog(effect.sleepStartMs),
+        wakeTime: formatEpochForLog(effect.wakeTimeMs),
+        targetDurationMin: effect.targetDurationMin
+      });
       const scheduleResult = await deps.alarmAdapter.scheduleAlarm(effect.wakeTimeMs);
       if (!scheduleResult.ok) {
         deps.logger.warn("Alarm scheduling failed.", {
@@ -197,10 +213,18 @@ async function persistStateIfNeeded(
       savedAtMs,
       state: nextState
     });
+    deps.logger.info("Persisted session updated.", {
+      previousStatus: previousState.status,
+      nextStatus: nextState.status
+    });
     return true;
   }
 
   await deps.sessionStore.clearSession();
+  deps.logger.info("Persisted session cleared.", {
+    previousStatus: previousState.status,
+    nextStatus: nextState.status
+  });
   return true;
 }
 

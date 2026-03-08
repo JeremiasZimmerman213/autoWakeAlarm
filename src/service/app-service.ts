@@ -1,26 +1,30 @@
 import { createZeppAlarmAdapter } from "../alarm/alarm-adapter.js";
 import { createOrchestrator } from "../core/orchestrator.js";
-import { NoopLogger, type Logger } from "../debug/logger.js";
+import { ConsoleLogger, type Logger } from "../debug/logger.js";
 import { createZeppSleepAdapter } from "../sleep/sleep-adapter.js";
 import { createZeppSessionStore } from "../storage/session-store.js";
 import { classifyServiceTrigger } from "./trigger-classifier.js";
+import { safeStringify } from "../utils/debug-format.js";
 
-const logger: Logger = new NoopLogger();
+const logger: Logger = new ConsoleLogger();
 
 const orchestrator = createOrchestrator({
   sessionStore: createZeppSessionStore(),
-  sleepAdapter: createZeppSleepAdapter(),
-  alarmAdapter: createZeppAlarmAdapter(),
+  sleepAdapter: createZeppSleepAdapter({ logger }),
+  alarmAdapter: createZeppAlarmAdapter({ logger }),
   logger
 });
 
 AppService({
   onInit(options?: unknown): void {
     // Required by Phase 3: always capture raw init payload first.
-    console.log("[sleep-alarm-service] onInit raw options:", options);
+    logger.info("App service onInit raw options.", { options: safeStringify(options) });
 
     const classification = classifyServiceTrigger(options);
-    console.log("[sleep-alarm-service] classified trigger:", classification.trigger);
+    logger.info("Trigger classification result.", {
+      trigger: classification.trigger,
+      rawParamsText: classification.rawParamsText
+    });
 
     void orchestrator
       .handleInvocation({
@@ -28,7 +32,11 @@ AppService({
         rawOptions: options
       })
       .then((result) => {
-        console.log("[sleep-alarm-service] orchestration result:", result.state.status);
+        logger.info("Orchestration result.", {
+          state: result.state.status,
+          didPersist: result.didPersist,
+          didScheduleAlarm: result.didScheduleAlarm
+        });
       })
       .catch((error: unknown) => {
         logger.error("App service orchestration failed.", {
@@ -36,12 +44,11 @@ AppService({
           trigger: classification.trigger,
           rawParamsText: classification.rawParamsText
         });
-        console.log("[sleep-alarm-service] orchestration error:", toErrorMessage(error));
       });
   },
 
   onDestroy(): void {
-    console.log("[sleep-alarm-service] onDestroy");
+    logger.info("App service onDestroy.");
   }
 });
 

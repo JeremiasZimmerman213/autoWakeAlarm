@@ -7,7 +7,9 @@ import {
   type PersistableState,
   type StateEffect
 } from "../core/types.js";
+import { ConsoleLogger, type Logger } from "../debug/logger.js";
 import { createZeppSessionStore } from "../storage/session-store.js";
+import { formatEpochForDisplay } from "../utils/debug-format.js";
 import * as hmUI from "@zos/ui";
 
 const DURATION_OPTIONS_MIN = [360, 420, 450, 480, 540] as const;
@@ -15,26 +17,29 @@ const DURATION_OPTIONS_MIN = [360, 420, 450, 480, 540] as const;
 const LAYOUT = {
   left: 12,
   width: 168,
-  titleY: 28,
-  durationY: 74,
-  statusY: 110,
-  detailY: 150,
-  changeButtonY: 204,
-  armButtonY: 264,
-  cancelButtonY: 324,
-  rowHeight: 40,
+  titleY: 22,
+  durationY: 62,
+  statusY: 98,
+  detailY: 132,
+  debugY: 168,
+  changeButtonY: 246,
+  armButtonY: 300,
+  cancelButtonY: 354,
+  rowHeight: 34,
   textSize: 22,
-  statusSize: 20,
-  buttonHeight: 44
+  statusSize: 18,
+  buttonHeight: 42
 } as const;
 
+const logger: Logger = new ConsoleLogger();
 const sessionStore = createZeppSessionStore();
-const alarmAdapter = createZeppAlarmAdapter();
+const alarmAdapter = createZeppAlarmAdapter({ logger });
 
 const pageState = {
   durationIndex: 3,
   statusText: "Status: Loading",
-  detailText: ""
+  detailText: "",
+  debugText: "Debug: --"
 };
 
 type TextWidget = ReturnType<typeof hmUI.createWidget>;
@@ -42,13 +47,17 @@ type TextWidget = ReturnType<typeof hmUI.createWidget>;
 let durationWidget: TextWidget | null = null;
 let statusWidget: TextWidget | null = null;
 let detailWidget: TextWidget | null = null;
+let debugWidget: TextWidget | null = null;
 
 Page({
   onInit(): void {
+    logger.info("Page onInit.");
     void refreshFromPersistedState();
   },
 
   build(): void {
+    logger.info("Page build.");
+
     hmUI.createWidget(hmUI.widget.TEXT, {
       x: LAYOUT.left,
       y: LAYOUT.titleY,
@@ -80,9 +89,18 @@ Page({
       x: LAYOUT.left,
       y: LAYOUT.detailY,
       w: LAYOUT.width,
-      h: 46,
+      h: LAYOUT.rowHeight,
       text: "",
       text_size: 16
+    });
+
+    debugWidget = hmUI.createWidget(hmUI.widget.TEXT, {
+      x: LAYOUT.left,
+      y: LAYOUT.debugY,
+      w: LAYOUT.width,
+      h: 72,
+      text: "Debug: --",
+      text_size: 14
     });
 
     hmUI.createWidget(hmUI.widget.BUTTON, {
@@ -123,18 +141,23 @@ Page({
   },
 
   onDestroy(): void {
+    logger.info("Page onDestroy.");
     durationWidget = null;
     statusWidget = null;
     detailWidget = null;
+    debugWidget = null;
   }
 });
 
 function cycleDuration(): void {
   pageState.durationIndex = (pageState.durationIndex + 1) % DURATION_OPTIONS_MIN.length;
+  logger.info("Duration changed.", { selectedDurationMin: currentDurationMin() });
   render();
 }
 
 async function armWorkflow(): Promise<void> {
+  logger.info("Arm tapped.", { selectedDurationMin: currentDurationMin() });
+
   const currentState = await loadCurrentAppState();
   const transition = reduceAppState(currentState, {
     type: "ARM",
@@ -144,15 +167,19 @@ async function armWorkflow(): Promise<void> {
 
   await applyEffects(transition.effects);
   await persistAppState(transition.state);
+  logger.info("Arm flow persisted.", { nextStatus: transition.state.status });
   await refreshFromPersistedState();
 }
 
 async function cancelWorkflow(): Promise<void> {
+  logger.info("Cancel tapped.");
+
   const currentState = await loadCurrentAppState();
   const transition = reduceAppState(currentState, { type: "CANCEL" });
 
   await applyEffects(transition.effects);
   await persistAppState(transition.state);
+  logger.info("Cancel flow persisted.", { nextStatus: transition.state.status });
   await refreshFromPersistedState();
 }
 
@@ -168,17 +195,28 @@ async function refreshFromPersistedState(): Promise<void> {
 
   pageState.statusText = formatStatusLabel(appState);
   pageState.detailText = formatDetailLabel(appState);
+  pageState.debugText = formatDebugSummary(appState);
+
+  logger.info("Persisted state loaded for page.", {
+    status: appState.status,
+    selectedDurationMin: currentDurationMin()
+  });
+
   render();
 }
 
 async function applyEffects(effects: ReadonlyArray<StateEffect>): Promise<void> {
   for (const effect of effects) {
     if (effect.type === "CANCEL_ALARM") {
-      await alarmAdapter.cancelAlarm(effect.alarmId);
+      const result = await alarmAdapter.cancelAlarm(effect.alarmId);
+      logger.info("Page cancel-alarm effect applied.", {
+        alarmId: effect.alarmId,
+        success: result.ok
+      });
       continue;
     }
 
-    // TODO(phase-4): SCHEDULE_ALARM effect handling stays in service/orchestrator flow.
+    logger.info("Page ignored non-cancel effect.", { effectType: effect.type });
   }
 }
 
@@ -218,7 +256,6 @@ function hasDuration(state: AppState): state is PersistableState {
 
 function render(): void {
   if (durationWidget !== null) {
-    // TODO(zepp-validation): Confirm hmUI.prop.MORE text updates are stable on Helio firmware.
     durationWidget.setProperty(hmUI.prop.MORE, {
       text: `Duration: ${currentDurationMin()} min`
     });
@@ -233,6 +270,12 @@ function render(): void {
   if (detailWidget !== null) {
     detailWidget.setProperty(hmUI.prop.MORE, {
       text: pageState.detailText
+    });
+  }
+
+  if (debugWidget !== null) {
+    debugWidget.setProperty(hmUI.prop.MORE, {
+      text: pageState.debugText
     });
   }
 }
@@ -263,11 +306,11 @@ function formatStatusLabel(state: AppState): string {
 
 function formatDetailLabel(state: AppState): string {
   if (state.status === "sleep_detected_alarm_scheduled") {
-    return `Wake: ${formatClock(state.wakeTimeMs)}`;
+    return `Wake: ${formatEpochForDisplay(state.wakeTimeMs)}`;
   }
 
   if (state.status === "missed_target") {
-    return `Wake passed: ${formatClock(state.wakeTimeMs)}`;
+    return `Wake passed: ${formatEpochForDisplay(state.wakeTimeMs)}`;
   }
 
   if (state.status === "error") {
@@ -277,9 +320,26 @@ function formatDetailLabel(state: AppState): string {
   return "";
 }
 
-function formatClock(epochMs: number): string {
-  const date = new Date(epochMs);
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${hours}:${minutes}`;
+function formatDebugSummary(state: AppState): string {
+  if (state.status === "armed_waiting_for_sleep") {
+    return `st:${state.status} dur:${state.targetDurationMin} arm:${formatEpochForDisplay(state.armedAtMs)}`;
+  }
+
+  if (state.status === "sleep_detected_alarm_scheduled") {
+    return `st:${state.status} dur:${state.targetDurationMin}\ns:${formatEpochForDisplay(state.sleepStartMs)} w:${formatEpochForDisplay(state.wakeTimeMs)} id:${state.alarmId}`;
+  }
+
+  if (state.status === "missed_target") {
+    return `st:${state.status} dur:${state.targetDurationMin}\ns:${formatEpochForDisplay(state.sleepStartMs)} w:${formatEpochForDisplay(state.wakeTimeMs)}`;
+  }
+
+  if (state.status === "alarm_fired") {
+    return `st:${state.status} wake:${formatEpochForDisplay(state.wakeTimeMs)}`;
+  }
+
+  if (state.status === "error") {
+    return `st:error msg:${state.message}`;
+  }
+
+  return `st:idle dur:${currentDurationMin()}`;
 }

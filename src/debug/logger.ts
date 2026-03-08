@@ -59,6 +59,34 @@ export class MemoryLogger implements Logger {
   }
 }
 
+export class ConsoleLogger implements Logger {
+  debug(message: string, context?: Readonly<Record<string, unknown>>): void {
+    this.log("debug", message, context);
+  }
+
+  info(message: string, context?: Readonly<Record<string, unknown>>): void {
+    this.log("info", message, context);
+  }
+
+  warn(message: string, context?: Readonly<Record<string, unknown>>): void {
+    this.log("warn", message, context);
+  }
+
+  error(message: string, context?: Readonly<Record<string, unknown>>): void {
+    this.log("error", message, context);
+  }
+
+  private log(level: LogLevel, message: string, context?: Readonly<Record<string, unknown>>): void {
+    const prefix = `[sleep-alarm][${level}]`;
+    if (context === undefined) {
+      console.log(prefix, message);
+      return;
+    }
+
+    console.log(prefix, message, context);
+  }
+}
+
 export function createLogger(enabled: boolean): Logger {
-  return enabled ? new MemoryLogger() : new NoopLogger();
+  return enabled ? new ConsoleLogger() : new NoopLogger();
 }
